@@ -1,0 +1,55 @@
+# this needs a higher version of compose
+version: '3.7'
+
+x-content-publisher-demo: &content-publisher-demo
+  image: content-publisher-demo
+  build:
+    context: .
+  volumes:
+    - home:/home/build
+    - ~/govuk:/govuk
+  working_dir: /govuk/content-publisher
+
+volumes:
+  home:
+  postgres:
+
+services:
+  postgres:
+    image: postgres
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 'postgres' 
+      
+  nginx-proxy:
+    image: jwilder/nginx-proxy:latest
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock      
+
+  # for tests
+  content-publisher-demo-lite:
+    <<: *content-publisher-demo
+    privileged: true
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres/content-publisher"
+      TEST_DATABASE_URL: "postgresql://postgres:postgres@postgres/content-publisher-test"
+
+  # for Rails
+  content-publisher-demo-app:
+    <<: *content-publisher-demo
+    depends_on:
+      - postgres
+      - nginx-proxy
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres/content-publisher"
+      HOST: 0.0.0.0
+      VIRTUAL_HOST: content-publisher-demo.intro-to-docker.gov.uk
+    expose:
+      - 3000      
+    command: bin/rails s
